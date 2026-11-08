@@ -765,8 +765,8 @@ public class FurnitureTable extends JTable implements View, Printable {
       }
     }
     if (!levelShown) {
-      // Insert Level after Name, or at the end if Name isn't displayed
-      printedColumns.add(nameIndex >= 0 ? nameIndex + 1 : printedColumns.size(),
+      // Append the Level column at the end, as in the expected output
+      printedColumns.add(
               this.furnitureColumnModel.getAvailableColumn(HomePieceOfFurniture.SortableProperty.LEVEL));
     }
     for (final TableColumn tableColumn : printedColumns) {
