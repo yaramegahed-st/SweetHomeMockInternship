@@ -131,6 +131,7 @@ public class FurnitureTable extends JTable implements View, Printable {
   private int                    furnitureInformationRow;
   private Popup                  furnitureInformationPopup;
   private AWTEventListener       informationPopupRemovalListener;
+  private FurnitureTableColumnModel furnitureColumnModel;
 
   /**
    * Creates a table that displays furniture of <code>home</code>.
@@ -154,7 +155,8 @@ public class FurnitureTable extends JTable implements View, Printable {
       setRowHeight(Math.round(getRowHeight() * resolutionScale));
     }
     setModel(new FurnitureTreeTableModel(home));
-    setColumnModel(new FurnitureTableColumnModel(home, preferences));
+    this.furnitureColumnModel = new FurnitureTableColumnModel(home, preferences);
+    setColumnModel(this.furnitureColumnModel);
     updateTableColumnsWidth(0);
     updateExpandedRows(home);
     updateTableSelectedFurniture(home);
@@ -750,8 +752,24 @@ public class FurnitureTable extends JTable implements View, Printable {
           return headerRendererLabel;
         }
       };
-    for (int columnIndex = 0, n = columnModel.getColumnCount(); columnIndex < n; columnIndex++) {
-      final TableColumn tableColumn = columnModel.getColumn(columnIndex);
+    List<TableColumn> printedColumns = new ArrayList<TableColumn>();
+    boolean levelShown = false;
+    int nameIndex = -1;
+    for (int i = 0, n = columnModel.getColumnCount(); i < n; i++) {
+      TableColumn column = columnModel.getColumn(i);
+      printedColumns.add(column);
+      if (column.getIdentifier() == HomePieceOfFurniture.SortableProperty.NAME) {
+        nameIndex = i;
+      } else if (column.getIdentifier() == HomePieceOfFurniture.SortableProperty.LEVEL) {
+        levelShown = true;
+      }
+    }
+    if (!levelShown) {
+      // Insert Level after Name, or at the end if Name isn't displayed
+      printedColumns.add(nameIndex >= 0 ? nameIndex + 1 : printedColumns.size(),
+              this.furnitureColumnModel.getAvailableColumn(HomePieceOfFurniture.SortableProperty.LEVEL));
+    }
+    for (final TableColumn tableColumn : printedColumns) {
       // Create a printable column from existing table column
       TableColumn printableColumn = new TableColumn();
       printableColumn.setIdentifier(tableColumn.getIdentifier());
@@ -793,20 +811,22 @@ public class FurnitureTable extends JTable implements View, Printable {
     if (EventQueue.isDispatchThread()) {
       TableColumnModel oldColumnModel = getColumnModel();
       Color oldGridColor = getGridColor();
-      setColumnModel(printableColumnModel);   
-      if (OperatingSystem.isWindows()) {
-        // Add 3 pixels to columns to get a correct rendering
-        updateTableColumnsWidth(3);
-      } else {
-        updateTableColumnsWidth(0);
+      try {
+        setColumnModel(printableColumnModel);
+        if (OperatingSystem.isWindows()) {
+          // Add 3 pixels to columns to get a correct rendering
+          updateTableColumnsWidth(3);
+        } else {
+          updateTableColumnsWidth(0);
+        }
+        setGridColor(gridColor);
+        Printable printable = getPrintable(PrintMode.FIT_WIDTH, null, null);
+        return printable.print(g, pageFormat, pageIndex);
+      } finally {
+        // Restore column model and grid color, even if printing fails
+        setColumnModel(oldColumnModel);
+        setGridColor(oldGridColor);
       }
-      setGridColor(gridColor);
-      Printable printable = getPrintable(PrintMode.FIT_WIDTH, null, null);
-      int pageExists = printable.print(g, pageFormat, pageIndex);
-      // Restore column model and grid color to their previous values
-      setColumnModel(oldColumnModel);
-      setGridColor(oldGridColor);
-      return pageExists;
     } else {
       // Print synchronously table in Event Dispatch Thread
       // The best solution should be to be able to print out of Event Dispatch Thread
@@ -816,7 +836,7 @@ public class FurnitureTable extends JTable implements View, Printable {
         int pageExists;
         PrinterException exception;
       }
-      
+
       final RunnableContext context = new RunnableContext();
       try {
         EventQueue.invokeAndWait(new Runnable() {
@@ -1015,6 +1035,10 @@ public class FurnitureTable extends JTable implements View, Printable {
       addHomeListener(home);
       addLanguageListener(preferences);
       updateModelColumns(home.getFurnitureVisibleProperties());
+    }
+
+    TableColumn getAvailableColumn(HomePieceOfFurniture.SortableProperty property) {
+      return this.availableColumns.get(property);
     }
 
     /**
